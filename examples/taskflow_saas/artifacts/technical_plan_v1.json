@@ -1,0 +1,143 @@
+{
+  "project_id": "taskflow-saas",
+  "prd_version": "1.0",
+  "architecture_summary": "Monolito modular em FastAPI com separação clara entre domínios (tasks, users, engine). PostgreSQL para dados relacionais + Redis para cache de sugestões. Frontend em Next.js 14 com App Router. Deploy inicial em Railway ou Render para reduzir ops.",
+  "tech_stack": {
+    "backend": "FastAPI (Python 3.11)",
+    "database": "PostgreSQL 16 + SQLAlchemy 2.0",
+    "cache": "Redis 7",
+    "frontend": "Next.js 14 + TypeScript + Tailwind CSS",
+    "auth": "Supabase Auth (ou Auth.js)",
+    "infra": "Railway (MVP) → migrável para AWS ECS",
+    "email": "Resend API",
+    "monitoring": "Sentry + Logfire"
+  },
+  "components": [
+    {
+      "name": "API Gateway",
+      "responsibility": "Roteamento, autenticação, rate limiting",
+      "tech": "FastAPI + Nginx"
+    },
+    {
+      "name": "Task Service",
+      "responsibility": "CRUD de tarefas, status, comentários, histórico",
+      "tech": "FastAPI + PostgreSQL"
+    },
+    {
+      "name": "Assignment Engine",
+      "responsibility": "Lógica de sugestão de responsável por tarefa",
+      "tech": "Python puro + Redis para cache de scores"
+    },
+    {
+      "name": "Team Service",
+      "responsibility": "Gestão de membros, skills, capacidade",
+      "tech": "FastAPI + PostgreSQL"
+    },
+    {
+      "name": "Notification Service",
+      "responsibility": "Envio de notificações in-app (email na Fase 2)",
+      "tech": "Background tasks FastAPI + PostgreSQL"
+    },
+    {
+      "name": "Frontend",
+      "responsibility": "Board Kanban, Dashboard, Onboarding",
+      "tech": "Next.js 14 + TanStack Query"
+    }
+  ],
+  "data_models": [
+    {
+      "name": "User",
+      "fields": ["id (uuid)", "email", "name", "team_id (fk)", "role (admin/member)", "created_at"]
+    },
+    {
+      "name": "Team",
+      "fields": ["id (uuid)", "name", "plan (free/pro)", "created_at"]
+    },
+    {
+      "name": "Skill",
+      "fields": ["id (uuid)", "user_id (fk)", "name", "level (1-5)", "verified_by (fk nullable)"]
+    },
+    {
+      "name": "Task",
+      "fields": ["id (uuid)", "title", "description", "status", "priority", "team_id (fk)", "assigned_to (fk nullable)", "created_by (fk)", "tags (array)", "due_date", "created_at", "updated_at"]
+    },
+    {
+      "name": "AssignmentSuggestion",
+      "fields": ["id (uuid)", "task_id (fk)", "suggested_user_id (fk)", "score (float)", "accepted (bool)", "reatributed_to (fk nullable)", "created_at"]
+    },
+    {
+      "name": "UserCapacity",
+      "fields": ["user_id (fk)", "week_start (date)", "capacity_pct (int)", "active_tasks_count (int)", "updated_at"]
+    }
+  ],
+  "api_endpoints": [
+    {"method": "POST", "path": "/api/v1/teams", "description": "Criar novo time"},
+    {"method": "POST", "path": "/api/v1/teams/{id}/members", "description": "Convidar membro"},
+    {"method": "GET", "path": "/api/v1/teams/{id}/capacity", "description": "Dashboard de capacidade"},
+    {"method": "POST", "path": "/api/v1/tasks", "description": "Criar tarefa"},
+    {"method": "GET", "path": "/api/v1/tasks", "description": "Listar tarefas do time (com filtros)"},
+    {"method": "PATCH", "path": "/api/v1/tasks/{id}/status", "description": "Mover status"},
+    {"method": "GET", "path": "/api/v1/tasks/{id}/suggest", "description": "Sugestão de responsável"},
+    {"method": "POST", "path": "/api/v1/tasks/{id}/assign", "description": "Aceitar/alterar sugestão"},
+    {"method": "PUT", "path": "/api/v1/users/{id}/skills", "description": "Atualizar skills"}
+  ],
+  "infrastructure": {
+    "environments": ["development (local)", "staging (Railway)", "production (Railway → AWS)"],
+    "ci_cd": "GitHub Actions — lint + test + deploy em push para main",
+    "database_migrations": "Alembic",
+    "secrets": "Railway Env Vars (MVP) → AWS Secrets Manager (produção)"
+  },
+  "implementation_phases": [
+    {
+      "phase": 1,
+      "name": "Foundation",
+      "scope": "Setup do projeto, auth, CRUD básico de times e membros",
+      "effort": "1 semana"
+    },
+    {
+      "phase": 2,
+      "name": "Core Features",
+      "scope": "Task board completo, skills, capacity dashboard",
+      "effort": "2 semanas"
+    },
+    {
+      "phase": 3,
+      "name": "Assignment Engine",
+      "scope": "Algoritmo de sugestão v1, feedback loop, cache",
+      "effort": "2 semanas"
+    },
+    {
+      "phase": 4,
+      "name": "Polish & Launch",
+      "scope": "Onboarding wizard, testes E2E, performance, deploy produção",
+      "effort": "1 semana"
+    }
+  ],
+  "trade_offs": [
+    {
+      "decision": "Backend framework",
+      "chosen": "FastAPI",
+      "rejected": "Django",
+      "rationale": "FastAPI tem melhor ergonomia para APIs async, tipagem nativa e documentação automática. Django seria overkill para a estrutura de domínio atual."
+    },
+    {
+      "decision": "Assignment Engine",
+      "chosen": "Algoritmo heurístico baseado em score",
+      "rejected": "ML model",
+      "rationale": "ML model requer volume de dados que não existe no MVP. Heurística com score ponderado (skills + carga + histórico) é suficiente e explicável para o usuário."
+    },
+    {
+      "decision": "Infraestrutura MVP",
+      "chosen": "Railway",
+      "rejected": "AWS ECS/EKS",
+      "rationale": "Railway reduz overhead de ops no MVP. Arquitetura containerizada permite migração futura sem rewrite."
+    }
+  ],
+  "estimated_effort": "6 semanas (1 engenheiro full-time)",
+  "risks": [
+    "Performance do Assignment Engine com times grandes (>100 membros) — mitigação: cache de scores no Redis",
+    "Custo de PostgreSQL em produção com escala — mitigação: pooling com PgBouncer",
+    "Complexidade do onboarding de skills — mitigação: wizard simplificado com sugestões por cargo"
+  ],
+  "created_at": "2026-06-05T00:00:00"
+}

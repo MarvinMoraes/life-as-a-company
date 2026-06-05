@@ -1,0 +1,123 @@
+{
+  "project_id": "taskflow-saas",
+  "version": "1.0",
+  "title": "TaskFlow — Gestão Inteligente de Tarefas para Times Remotos",
+  "executive_summary": "Times remotos perdem até 30% do tempo em alinhamento e distribuição de tarefas. TaskFlow é uma plataforma SaaS que aprende com os padrões do time e distribui tarefas automaticamente, eliminando reuniões desnecessárias.",
+  "problem": "Times remotos de 5-50 pessoas não têm uma forma eficiente de distribuir tarefas levando em conta habilidades, histórico e disponibilidade em tempo real. O resultado são reuniões de alinhamento frequentes, tarefas mal distribuídas e burnout assimétrico no time.",
+  "solution": "SaaS com engine de sugestão inteligente que aprende com o histórico do time, habilidades declaradas e disponibilidade para sugerir automaticamente quem deve fazer cada tarefa, com um fluxo de aprovação simples.",
+  "personas": [
+    {
+      "name": "Ana",
+      "role": "Tech Lead / Gestora de Projetos",
+      "pains": [
+        "Passa 5h/semana em reuniões de distribuição de tarefas",
+        "Sempre os mesmos membros ficam sobrecarregados",
+        "Não tem visibilidade de quem está com capacidade disponível"
+      ],
+      "gains": [
+        "Distribuição justa e baseada em dados",
+        "Menos reuniões de alinhamento",
+        "Visibilidade de carga do time em tempo real"
+      ],
+      "jtbd": "Garantir que as tarefas certas cheguem às pessoas certas sem overhead de gestão"
+    },
+    {
+      "name": "Carlos",
+      "role": "Desenvolvedor Senior",
+      "pains": [
+        "Recebe tarefas fora da sua área sem contexto",
+        "Não sabe qual tarefa deve priorizar",
+        "Interrupções constantes para alinhamento"
+      ],
+      "gains": [
+        "Tarefas alinhadas com suas habilidades",
+        "Clareza de prioridade sem precisar perguntar",
+        "Menos interrupções"
+      ],
+      "jtbd": "Saber exatamente no que trabalhar sem precisar perguntar ou adivinhar"
+    }
+  ],
+  "value_proposition": "TaskFlow distribui tarefas automaticamente baseado em quem é melhor para fazê-las agora — não em quem está online ou em quem gritou mais alto na última reunião.",
+  "features": [
+    {
+      "name": "Smart Task Assignment",
+      "description": "Engine que sugere automaticamente o responsável pela tarefa baseado em: habilidades declaradas, histórico de performance, carga atual e disponibilidade.",
+      "priority": "must",
+      "acceptance_criteria": [
+        "Sugestão aparece em menos de 2 segundos após criar tarefa",
+        "Gestor pode aceitar ou reatribuir com 1 clique",
+        "Engine aprende com reatribuições (feedback loop)"
+      ]
+    },
+    {
+      "name": "Skills & Capacity Dashboard",
+      "description": "Painel que mostra habilidades do time e carga atual de cada membro.",
+      "priority": "must",
+      "acceptance_criteria": [
+        "Carga por membro em % de capacidade",
+        "Skills editáveis pelo próprio colaborador",
+        "Histórico de tarefas concluídas por tipo"
+      ]
+    },
+    {
+      "name": "Task Board",
+      "description": "Board Kanban básico para visualização e gerenciamento de tarefas.",
+      "priority": "must",
+      "acceptance_criteria": [
+        "Colunas: Backlog, Em Progresso, Revisão, Concluído",
+        "Drag & drop entre colunas",
+        "Filtros por responsável e por tag"
+      ]
+    },
+    {
+      "name": "Team Onboarding",
+      "description": "Fluxo guiado para configuração inicial das habilidades do time.",
+      "priority": "should",
+      "acceptance_criteria": [
+        "Onboarding completo em menos de 10 minutos",
+        "Import de membros via CSV ou convite por email",
+        "Wizard de skills com sugestões por cargo"
+      ]
+    }
+  ],
+  "out_of_scope": [
+    "Integração com Slack (Fase 2)",
+    "App mobile nativo (Fase 2)",
+    "Relatórios automáticos por email (Fase 2)",
+    "Gestão de projetos complexos (épicos, sprints)",
+    "Time tracking integrado",
+    "Faturamento e controle financeiro do time"
+  ],
+  "success_metrics": [
+    "Redução de 50% no tempo de alinhamento de distribuição de tarefas",
+    "NPS > 40 após 30 dias de uso",
+    "Taxa de aceitação de sugestão do engine > 70%",
+    "Tempo médio de onboarding < 10 minutos"
+  ],
+  "assumptions": [
+    "Times têm pelo menos 1 gestor que pode aprovar distribuições",
+    "Membros do time aceitam declarar habilidades",
+    "Maioria do time usa desktop (mobile é Fase 2)"
+  ],
+  "risks": [
+    "Engine de sugestão com qualidade baixa nos primeiros ciclos → mitigação: modo manual + feedback explícito",
+    "Resistência à transparência de carga → mitigação: configuração de privacidade por membro",
+    "Competição com Asana/Linear/Jira → diferencial claro na sugestão inteligente"
+  ],
+  "roadmap_phases": [
+    {
+      "phase": 1,
+      "name": "MVP",
+      "features": ["Smart Task Assignment", "Skills & Capacity Dashboard", "Task Board", "Team Onboarding"],
+      "duration": "6 semanas"
+    },
+    {
+      "phase": 2,
+      "name": "Integrações",
+      "features": ["Slack Integration", "Email Reports", "Mobile App"],
+      "duration": "8 semanas"
+    }
+  ],
+  "created_at": "2026-06-05T00:00:00",
+  "approved": true
+}

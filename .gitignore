@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Ambiente
+.env
+.env.local
+
+# Testes
+.coverage
+htmlcov/
+.pytest_cache/
+*.xml
+
+# Mypy / Ruff
+.mypy_cache/
+.ruff_cache/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vault (notas pessoais — não versionar, só templates e _system)
+vault/Projects/
+vault/PRDs/
+vault/Decisions/
+vault/Research/
+vault/Marketing/
+vault/QA/
+vault/Agents/
+vault/Snapshots/
+vault/Daily/
+vault/Scratchpad/
+
+# Examples results (gerados em runtime)
+examples/*/results/
+examples/*/vault/Projects/
+examples/*/vault/Decisions/
+examples/*/vault/Snapshots/
+
+# Logs
+*.log
+logs/
