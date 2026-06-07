@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import sys
 import uuid
@@ -11,6 +12,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
 load_dotenv()
+
+DEFAULT_VAULT = Path("C:/Users/MarcusMoraes/Documents/laac")
 
 
 def _render(data: dict, summary: str) -> str:
@@ -44,7 +47,56 @@ def _render(data: dict, summary: str) -> str:
     return "\n".join(parts) if parts else summary
 
 
+def _load_vault_context(vault: Path, project_id: str) -> str:
+    """Carrega contexto relevante do vault para o projeto."""
+    context_parts: list[str] = []
+
+    # Pastas onde procurar arquivos do projeto
+    search_paths = [
+        vault / "Projects" / project_id,
+        vault / "PRDs" / project_id,
+        vault / "Decisions" / project_id,
+    ]
+
+    for folder in search_paths:
+        if folder.exists():
+            for md_file in sorted(folder.glob("*.md")):
+                try:
+                    content = md_file.read_text(encoding="utf-8")
+                    # Inclui só as primeiras 100 linhas de cada arquivo
+                    lines = content.splitlines()[:100]
+                    context_parts.append(
+                        f"\n--- {md_file.name} ---\n" + "\n".join(lines)
+                    )
+                except Exception:
+                    pass
+
+    if not context_parts:
+        return f"Projeto '{project_id}' — sem notas no vault ainda."
+
+    return (
+        f"Contexto do projeto '{project_id}' carregado do vault Obsidian "
+        f"({vault}):\n" + "\n".join(context_parts)
+    )
+
+
 async def main() -> None:
+    parser = argparse.ArgumentParser(description="Chat com o Manager Agent")
+    parser.add_argument(
+        "--project", "-p",
+        default="flouwy",
+        help="ID do projeto (nome da pasta no vault). Default: flouwy",
+    )
+    parser.add_argument(
+        "--vault", "-v",
+        default=str(DEFAULT_VAULT),
+        help=f"Caminho do vault Obsidian. Default: {DEFAULT_VAULT}",
+    )
+    args = parser.parse_args()
+
+    vault_path = Path(args.vault)
+    project_id = args.project
+
     from src.config.settings import get_settings
     from src.providers.claude_provider import ClaudeLLMProvider
     from src.prompts.loader import PromptLoader
@@ -62,14 +114,20 @@ async def main() -> None:
     prompt = PromptLoader.load(AgentRole.MANAGER)
     manager = ManagerAgent(provider=provider, prompt=prompt)
 
+    # Carrega contexto do vault no início da sessão
+    vault_context = _load_vault_context(vault_path, project_id)
+    vault_loaded = "sem notas" not in vault_context
+
     print("=" * 60)
-    print("  SaaS Factory — Manager Agent")
+    print(f"  SaaS Factory — Manager Agent")
+    print(f"  Projeto: {project_id}")
+    print(f"  Vault:   {vault_path}")
+    print(f"  Contexto: {'✓ carregado' if vault_loaded else '⚠ sem notas ainda'}")
     print("  Digite 'sair' para encerrar")
     print("=" * 60)
     print()
 
-    context_summary = "Início da sessão. Sem histórico anterior."
-    project_id = "laac"
+    context_summary = vault_context
 
     while True:
         try:
@@ -105,7 +163,7 @@ async def main() -> None:
             layer_name="context",
             content=context_summary,
             token_estimate=len(context_summary) // 4,
-            source="conversation_history",
+            source="vault_obsidian",
         ))
 
         try:
