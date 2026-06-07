@@ -25,15 +25,14 @@ class QAAgent(BaseAgent):
         task = context_pack.task
         user_message = self._make_user_message(context_pack)
 
-        depth_tokens = {"short": 512, "medium": 1024, "deep": 2048}
+        depth_tokens = {"short": 1024, "medium": 2048, "deep": 4096}
         max_tokens = depth_tokens.get(task.max_response_depth, 1024)
 
         raw = await self._call_provider(user_message, max_tokens=max_tokens)
 
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            data = {"status": "partial", "verdict": "needs_revision", "raw_response": raw}
+        data = self._parse_json(raw)
+        if "verdict" not in data:
+            data["verdict"] = "needs_revision"
 
         # Monta QAEvaluation estruturado
         evaluation = None

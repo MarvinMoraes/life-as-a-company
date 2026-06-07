@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -52,15 +54,44 @@ class BaseAgent(ABC):
     def _make_user_message(self, pack: AgentContextPack) -> str:
         context_text = self._format_context_pack(pack)
         task = pack.task
+        criteria = "\n".join(f"- {c}" for c in task.acceptance_criteria) or "- Entregar conforme formato solicitado"
         return (
             f"## Tarefa: {task.objective}\n\n"
             f"**Projeto:** {task.project_id}\n"
-            f"**Profundidade esperada:** {task.max_response_depth}\n"
-            f"**Formato de saída esperado:** {task.expected_output_format}\n\n"
-            f"### Critérios de Aceite\n"
-            + "\n".join(f"- {c}" for c in task.acceptance_criteria)
+            f"**Profundidade esperada:** {task.max_response_depth}\n\n"
+            f"### Critérios de Aceite\n{criteria}"
             + (f"\n\n### Contexto\n{context_text}" if context_text else "")
+            + f"\n\n---\n**IMPORTANTE:** Responda APENAS com JSON válido seguindo o formato especificado no seu prompt de sistema. Sem texto antes ou depois do JSON. Sem blocos markdown."
         )
+
+    @staticmethod
+    def _parse_json(raw: str) -> dict:
+        """Extrai JSON da resposta mesmo que venha em bloco markdown ou com texto ao redor."""
+        # 1. Tenta direto
+        try:
+            return json.loads(raw.strip())
+        except json.JSONDecodeError:
+            pass
+
+        # 2. Extrai conteúdo de bloco markdown ```json ... ``` ou ``` ... ```
+        match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw)
+        if match:
+            try:
+                return json.loads(match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+        # 3. Extrai do primeiro { até o último } (JSON completo no texto)
+        start = raw.find("{")
+        end = raw.rfind("}")
+        if start != -1 and end > start:
+            try:
+                return json.loads(raw[start : end + 1])
+            except json.JSONDecodeError:
+                pass
+
+        # 4. Fallback — preserva conteúdo como texto para não perder informação
+        return {"status": "partial", "raw_response": raw, "summary": raw[:300]}
 
     async def _call_provider(self, user_message: str, max_tokens: int = 2048) -> str:
         """Chama o provider LLM com o prompt de sistema do agente."""

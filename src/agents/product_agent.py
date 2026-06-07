@@ -26,15 +26,12 @@ class ProductAgent(BaseAgent):
         task = context_pack.task
         user_message = self._make_user_message(context_pack)
 
-        depth_tokens = {"short": 768, "medium": 2048, "deep": 4096}
+        depth_tokens = {"short": 1024, "medium": 3000, "deep": 6000}
         max_tokens = depth_tokens.get(task.max_response_depth, 2048)
 
         raw = await self._call_provider(user_message, max_tokens=max_tokens)
 
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            data = {"status": "partial", "raw_response": raw}
+        data = self._parse_json(raw)
 
         # Tenta construir PRD estruturado
         prd = None

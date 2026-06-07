@@ -32,15 +32,22 @@ class ManagerAgent(BaseAgent):
         user_message = self._make_user_message(context_pack)
 
         # Profundidade de resposta → mapeia para max_tokens
-        depth_tokens = {"short": 512, "medium": 1024, "deep": 2048}
+        depth_tokens = {"short": 1024, "medium": 2048, "deep": 4096}
         max_tokens = depth_tokens.get(task.max_response_depth, 1024)
 
         raw = await self._call_provider(user_message, max_tokens=max_tokens)
 
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            data = {"status": "partial", "raw_response": raw}
+        data = self._parse_json(raw)
+
+        # Normaliza listas que Claude pode retornar como objetos em vez de strings
+        memory_writes = [
+            v if isinstance(v, str) else str(v.get("slug", v.get("type", str(v))))
+            for v in data.get("memory_writes", [])
+        ]
+        decisions = [
+            v if isinstance(v, dict) else {"title": str(v), "rationale": ""}
+            for v in data.get("decisions", [])
+        ]
 
         return AgentResponse(
             response_id=f"resp-{uuid.uuid4().hex[:8]}",
@@ -48,12 +55,12 @@ class ManagerAgent(BaseAgent):
             agent_role=self.role,
             status=data.get("status", "success"),
             content=data,
-            summary=data.get("context_summary") or data.get("summary", "Manager processou a tarefa."),
-            memory_writes=data.get("memory_writes", []),
-            decisions=data.get("decisions", []),
+            summary=data.get("context_summary") or data.get("immediate_action") or data.get("summary", "Manager processou a tarefa."),
+            memory_writes=memory_writes,
+            decisions=decisions,
             tokens_used=context_pack.token_total,
             follow_up_tasks=[
-                step["task"] for step in data.get("plan", [])
+                step.get("task", step.get("objective", "")) for step in data.get("plan", [])
                 if isinstance(step, dict)
             ],
         )
