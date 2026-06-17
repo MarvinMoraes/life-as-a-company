@@ -25,7 +25,7 @@ class Orchestrator:
     """Ponto central de coordenação da fábrica.
 
     Responsabilidades:
-    - Instanciar e registrar os 5 agentes
+    - Instanciar e registrar os 5 agentes (com tools quando configurado)
     - Montar context packs eficientes
     - Delegar tarefas ao agente correto
     - Consolidar resultados
@@ -36,24 +36,92 @@ class Orchestrator:
         self,
         vault_path: Path | str = "./vault",
         provider: BaseLLMProvider | None = None,
+        enable_tools: bool | None = None,
+        mcp_adapters: dict | None = None,
     ) -> None:
         self.vault_path = Path(vault_path).resolve()
         self.provider = provider or get_provider()
+        # Auto-detect: desativa tools se o provider não as suporta (ex: mock)
+        if enable_tools is None:
+            enable_tools = getattr(self.provider, "provider_name", "") not in ("mock", "base")
+        self.enable_tools = enable_tools
+        self.mcp_adapters = mcp_adapters or {}
         self.memory = MemoryManager(self.vault_path)
         self.governor = ContextGovernor(self.memory)
         self.registry = AgentRegistry(self.provider)
         self._setup_agents()
-        logger.info("Orchestrator inicializado. Vault: %s", self.vault_path)
+        logger.info("Orchestrator inicializado. Vault: %s | tools=%s", self.vault_path, enable_tools)
 
     def _setup_agents(self) -> None:
-        """Instancia e registra todos os agentes."""
+        """Instancia e registra todos os agentes, com tools quando disponíveis."""
+        from ..config.settings import get_settings
+        from ..tools.executor import ToolExecutor
+        from ..tools.mcp_adapter import get_adapter_for_tool
+
         prompts = PromptLoader.load_all()
-        self.registry.register(ManagerAgent(self.provider, prompts[AgentRole.MANAGER]))
-        self.registry.register(EngineerAgent(self.provider, prompts[AgentRole.ENGINEER]))
-        self.registry.register(ProductAgent(self.provider, prompts[AgentRole.PRODUCT]))
-        self.registry.register(MarketingAgent(self.provider, prompts[AgentRole.MARKETING]))
-        self.registry.register(QAAgent(self.provider, prompts[AgentRole.QA]))
-        logger.info("Agentes registrados: %s", [a["name"] for a in self.registry.list_agents()])
+
+        if not self.enable_tools:
+            # Modo legado: sem tools (para testes com mock provider)
+            self.registry.register(ManagerAgent(self.provider, prompts[AgentRole.MANAGER]))
+            self.registry.register(EngineerAgent(self.provider, prompts[AgentRole.ENGINEER]))
+            self.registry.register(ProductAgent(self.provider, prompts[AgentRole.PRODUCT]))
+            self.registry.register(MarketingAgent(self.provider, prompts[AgentRole.MARKETING]))
+            self.registry.register(QAAgent(self.provider, prompts[AgentRole.QA]))
+            logger.info("Agentes registrados (sem tools): %s", [a["name"] for a in self.registry.list_agents()])
+            return
+
+        settings = get_settings()
+
+        # Closure: Manager delega para outros agentes via esta função
+        # Sem import circular — ToolExecutor recebe apenas Callable
+        async def _agent_caller(role: str, objective: str, context: str) -> dict:
+            response = await self.run_task(
+                role=AgentRole(role),
+                objective=objective,
+                project_id="__delegation__",
+                context_summary=context,
+                depth="medium",
+            )
+            return {"summary": response.summary, "content": str(response.content)[:500]}
+
+        def _make_mcp_adapter_for_role(role: AgentRole):
+            """Retorna um MCP adapter composto se houver adapters para o role."""
+            if not self.mcp_adapters:
+                return None
+            return _CompositeMCPAdapter(self.mcp_adapters)
+
+        def _make_executor(role: AgentRole, with_delegation: bool = False) -> ToolExecutor:
+            return ToolExecutor(
+                vault_path=self.vault_path,
+                flouwy_path=settings.flouwy_dir,
+                role=role,
+                agent_caller=_agent_caller if with_delegation else None,
+                mcp_adapter=_make_mcp_adapter_for_role(role),
+            )
+
+        self.registry.register(ManagerAgent(
+            self.provider,
+            prompts[AgentRole.MANAGER],
+            tool_executor=_make_executor(AgentRole.MANAGER, with_delegation=True),
+            agent_caller=_agent_caller,
+        ))
+        self.registry.register(EngineerAgent(
+            self.provider, prompts[AgentRole.ENGINEER],
+            tool_executor=_make_executor(AgentRole.ENGINEER),
+        ))
+        self.registry.register(ProductAgent(
+            self.provider, prompts[AgentRole.PRODUCT],
+            tool_executor=_make_executor(AgentRole.PRODUCT),
+        ))
+        self.registry.register(MarketingAgent(
+            self.provider, prompts[AgentRole.MARKETING],
+            tool_executor=_make_executor(AgentRole.MARKETING),
+        ))
+        self.registry.register(QAAgent(
+            self.provider, prompts[AgentRole.QA],
+            tool_executor=_make_executor(AgentRole.QA),
+        ))
+        logger.info("Agentes registrados (com tools): %s", [a["name"] for a in self.registry.list_agents()])
 
     async def run_task(
         self,
@@ -207,3 +275,17 @@ class Orchestrator:
         )
         await self.memory.save_note(note)
         logger.info("Snapshot salvo: %s", snapshot.snapshot_id)
+
+
+class _CompositeMCPAdapter:
+    """Agrupa múltiplos MCPToolAdapters e roteia por nome de tool."""
+
+    def __init__(self, adapters: dict) -> None:
+        self._adapters = adapters
+
+    async def call_tool(self, tool_name: str, tool_input: dict) -> str:
+        from ..tools.mcp_adapter import get_adapter_for_tool
+        adapter = get_adapter_for_tool(tool_name, self._adapters)
+        if adapter:
+            return await adapter.call_tool(tool_name, tool_input)
+        return f"ERROR: Nenhum MCP adapter disponível para tool '{tool_name}'"

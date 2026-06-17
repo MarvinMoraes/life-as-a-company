@@ -1,8 +1,7 @@
-"""Senior Full Stack Engineer Agent."""
+﻿"""Senior Full Stack Engineer Agent."""
 
 from __future__ import annotations
 
-import json
 import uuid
 from typing import TYPE_CHECKING
 
@@ -13,27 +12,32 @@ from ..schemas.task import AgentRole
 
 if TYPE_CHECKING:
     from ..providers.base_provider import BaseLLMProvider
+    from ..tools.executor import ToolExecutor
 
 
 class EngineerAgent(BaseAgent):
-    """Responsável por arquitetura, implementação e decisões técnicas."""
-
     role = AgentRole.ENGINEER
     name = "Senior Full Stack Engineer"
-    description = "Arquitetura, stack, implementação e trade-offs técnicos."
+    description = "Arquitetura, stack, implementacao e trade-offs tecnicos."
+
+    def __init__(self, provider, prompt, tool_executor=None):
+        super().__init__(provider, prompt, tool_executor)
 
     async def execute(self, context_pack: AgentContextPack) -> AgentResponse:
         task = context_pack.task
-        user_message = self._make_user_message(context_pack)
-
         depth_tokens = {"short": 1024, "medium": 2048, "deep": 4096}
         max_tokens = depth_tokens.get(task.max_response_depth, 1536)
 
-        raw = await self._call_provider(user_message, max_tokens=max_tokens)
+        if self.tool_executor:
+            from ..tools.definitions import get_tool_definitions_for_role
+            user_message = self._make_user_message_for_tools(context_pack)
+            tools = get_tool_definitions_for_role(self.role)
+            raw = await self._run_agentic_loop(user_message, tools, max_tokens=max_tokens)
+        else:
+            user_message = self._make_user_message(context_pack)
+            raw = await self._call_provider(user_message, max_tokens=max_tokens)
 
         data = self._parse_json(raw)
-
-        # Tenta montar TechnicalPlan se dados suficientes
         technical_plan = None
         if data.get("tech_stack") and data.get("status") == "success":
             try:
@@ -59,7 +63,7 @@ class EngineerAgent(BaseAgent):
             agent_role=self.role,
             status=data.get("status", "success"),
             content=technical_plan.model_dump() if technical_plan else data,
-            summary=data.get("architecture_summary", "Plano técnico gerado.")[:200],
+            summary=data.get("architecture_summary", "Plano tecnico gerado.")[:200],
             tokens_used=context_pack.token_total,
             decisions=[
                 {"title": t.get("decision", ""), "rationale": t.get("rationale", "")}

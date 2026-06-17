@@ -35,6 +35,16 @@ class Settings(BaseSettings):
     memory_snapshots_enabled: bool = True
     memory_max_notes_in_context: int = 5
 
+    # Flouwy app path
+    flouwy_path: Path = Field(default=Path("C:/Users/MarcusMoraes/Documents/GitHub/flowly"))
+
+    # MCP / Integrações externas
+    github_token: str = ""
+    brave_api_key: str = ""
+
+    # Prompt caching (Anthropic beta)
+    prompt_caching_enabled: bool = True
+
     # n8n
     n8n_base_url: str = "http://localhost:5678"
     n8n_api_key: str = ""
@@ -46,6 +56,18 @@ class Settings(BaseSettings):
     @property
     def vault_dir(self) -> Path:
         return self.vault_path.resolve()
+
+    @property
+    def flouwy_dir(self) -> Path:
+        return self.flouwy_path.resolve()
+
+    @property
+    def has_github_mcp(self) -> bool:
+        return bool(self.github_token)
+
+    @property
+    def has_brave_mcp(self) -> bool:
+        return bool(self.brave_api_key)
 
 
 @lru_cache(maxsize=1)
