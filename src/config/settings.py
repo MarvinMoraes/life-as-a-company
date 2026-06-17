@@ -21,7 +21,6 @@ class Settings(BaseSettings):
 
     # Providers
     anthropic_api_key: str = ""
-    openai_api_key: str = ""
     default_provider: str = "mock"
     default_model: str = "claude-sonnet-4-6"
 

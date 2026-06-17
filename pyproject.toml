@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "saas-factory"
-version = "0.1.0"
+version = "0.2.0"
 description = "Fábrica de SaaS agêntica multiagente com memória em Obsidian"
 requires-python = ">=3.10"
 dependencies = [
@@ -23,7 +23,6 @@ dependencies = [
 
 [project.optional-dependencies]
 claude = ["anthropic>=0.28"]
-openai = ["openai>=1.30"]
 dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",

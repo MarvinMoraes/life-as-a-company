@@ -33,7 +33,7 @@ def idea(
     project_id: str = typer.Option(..., "--project", "-p", help="ID do projeto (kebab-case)"),
     audience: str = typer.Option("", "--audience", "-a", help="Público-alvo inicial"),
     vault: str = typer.Option("./vault", "--vault", "-v", help="Caminho do vault Obsidian"),
-    provider: str = typer.Option("mock", "--provider", help="LLM provider: mock | claude | openai"),
+    provider: str = typer.Option("mock", "--provider", help="LLM provider: mock | claude"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Salvar resultado em JSON"),
 ):
     """Workflow A: Ideia → PRD (idea-to-prd)"""
