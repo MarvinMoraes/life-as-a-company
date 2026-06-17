@@ -12,7 +12,6 @@ class BaseLLMProvider(ABC):
     Providers disponíveis:
     - MockLLMProvider   — testes locais, sem API
     - ClaudeLLMProvider — Anthropic Claude API
-    - OpenAILLMProvider — OpenAI-compatible APIs
     """
 
     provider_name: str = "base"
