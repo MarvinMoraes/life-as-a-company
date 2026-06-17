@@ -1,108 +1,142 @@
-# life-as-a-company
+﻿# life-as-a-company
 
-**Uma fábrica de SaaS agêntica e reutilizável.** Recebe uma ideia, passa por discovery, valida mercado, gera PRD, projeta a arquitetura, revisa com QA e registra tudo em memória Obsidian — com disciplina máxima de tokens.
+**Uma fábrica de SaaS agêntica.** Cinco agentes especializados que orquestram, planejam, codificam, pesquisam e revisam — com tool use real, memória em Obsidian e disciplina máxima de tokens.
 
 ---
 
-## O que é isso
+## Stack
 
-Uma plataforma-base multiagente para operar como uma empresa de software de uma pessoa só. Cinco agentes especializados colaboram sob orquestração central para transformar ideias em produtos definidos, planejados e documentados — sem desperdício de contexto.
+| Camada | Tecnologia |
+|--------|-----------|
+| Runtime | Python 3.11+ |
+| LLM | Anthropic Claude (claude-sonnet-4-6) |
+| Tool Use | Anthropic function calling + MCP servers |
+| Schemas | Pydantic v2 |
+| Memória | Obsidian markdown (vault local) |
+| CLI | Rich + Typer |
+| Async | asyncio + aiofiles |
+| Testes | pytest + pytest-asyncio |
+| Linter | Ruff |
 
-```
-Ideia bruta
-    → Manager (interpreta e delega)
-    → Product Strategist (discovery + PRD)
-    → Marketing Strategist (mercado + GTM)
-    → QA (revisão + aprovação)
-    → Engineer (arquitetura + plano técnico)
-    → Vault Obsidian (memória viva)
-```
+### MCPs Suportados (opcionais)
+
+| MCP | Agentes | Tools |
+|-----|---------|-------|
+| `@modelcontextprotocol/server-github` | Manager, Engineer | `github_list_issues`, `github_create_pull_request`, `github_search_code` |
+| `@modelcontextprotocol/server-brave-search` | Product, Marketing | `web_search` |
+| `@modelcontextprotocol/server-sequential-thinking` | todos | raciocínio estruturado |
+| `@modelcontextprotocol/server-memory` | todos | grafo de entidades |
+| `@modelcontextprotocol/server-git` | Engineer | `git_diff`, `git_log`, `git_status` |
 
 ---
 
 ## Os 5 Agentes
 
-| Agente | Papel | Entrega |
-|--------|-------|---------|
-| **Manager** | Orquestra, delega, controla contexto | Planos, decisões, snapshots |
-| **Product Strategist** | Discovery, personas, escopo | PRD completo |
-| **Senior Engineer** | Arquitetura, stack, código | TechnicalPlan |
-| **Marketing Strategist** | Mercado, posicionamento, GTM | MarketingPlan |
-| **QA** | Revisão, veredictos, achados | QAEvaluation |
+| Agente | Papel | Tools |
+|--------|-------|-------|
+| **Manager** | Orquestra, delega, controla contexto | delegate, read/write vault, GitHub |
+| **Product** | Discovery, PRD, personas, roadmap | read/write vault, web_search |
+| **Engineer** | Arquitetura, código real, PRs | read/write/list flouwy, GitHub, git |
+| **Marketing** | Mercado, posicionamento, GTM | read/write vault, web_search |
+| **QA** | Revisão, lint, build, veredictos | read flouwy, npm run lint/build |
 
-Cada agente tem: prompt de sistema dedicado, política de tokens, formato de saída estruturado e política de memória própria. Agentes não se comunicam diretamente — tudo passa pelo Manager.
-
----
-
-## Workflows
-
-### A — Idea → PRD
-```
-User → Manager → Product → Marketing → QA → Manager
-```
-Transforma uma ideia bruta em PRD aprovado com análise de mercado.
-
-### B — PRD → Build
-```
-PRD → Manager → Engineer → QA → Manager
-```
-Gera plano técnico completo a partir de um PRD aprovado.
-
-### C — Product Improvement
-```
-Feedback → Manager → Product + Marketing → Engineer → QA
-```
-Processa feedback de usuários e gera delta de produto priorizado.
-
-### D — Project Audit
-```
-Manager → QA → Product → Engineer → Manager
-```
-Auditoria completa do estado atual de qualquer projeto.
+Agentes não se comunicam diretamente — tudo passa pelo Manager via closure `_agent_caller`.
 
 ---
 
-## Instalação
+## Organização do Repositório
+
+```
+life-as-a-company/
+├── src/
+│   ├── agents/          → 5 implementações de agente
+│   ├── core/            → BaseAgent (loop agêntico), Registry, ContextGovernor
+│   ├── events.py        → EventBus global pub/sub (Rich CLI)
+│   ├── orchestrator/    → Orchestrator (ponto central)
+│   ├── prompts/         → system prompts em markdown por agente
+│   ├── providers/       → Mock + Claude + factory pattern
+│   ├── schemas/         → contratos Pydantic (TaskBrief, AgentResponse, etc.)
+│   ├── tools/           → ToolExecutor, tool definitions, MCPToolAdapter
+│   ├── workflows/       → 5 workflows prontos
+│   ├── memory/          → MemoryManager + ContextCompressor
+│   ├── obsidian/        → Writer + Reader do vault
+│   ├── config/          → Settings via pydantic-settings
+│   └── utils/           → token counter, formatters
+├── scripts/
+│   ├── factory_cli.py   → Rich CLI principal (modos: chat, workflow, agent)
+│   ├── chat_manager.py  → CLI legado (modo chat simples)
+│   └── dev/             → scripts de debug/dev
+├── vault/
+│   ├── _system/         → FACTORY_PRINCIPLES.md, AGENT_REGISTRY.md, INDEX.md
+│   └── Templates/       → templates de notas (prd, project, qa, etc.)
+├── docs/
+│   ├── architecture.md  → diagramas Mermaid e detalhes de cada componente
+│   └── token_governance.md → política de tokens
+├── tests/               → 21 testes (smoke, schemas, memory)
+├── examples/
+│   └── taskflow_saas/   → exemplo ponta a ponta com mock provider
+└── pyproject.toml       → dependências e configuração
+```
+
+---
+
+## Como Usar em Projetos Novos
+
+### 1. Clone e configure o ambiente
 
 ```bash
-# 1. Clone o repositório
-git clone https://github.com/seu-usuario/life-as-a-company.git
+git clone https://github.com/MarcusMGS/life-as-a-company.git
 cd life-as-a-company
 
-# 2. Crie ambiente virtual
 python -m venv .venv
 .venv\Scripts\activate          # Windows
 # source .venv/bin/activate     # Linux/Mac
 
-# 3. Instale dependências
-pip install -e ".[dev]"
-
-# 4. Configure variáveis de ambiente
-cp .env.example .env
-# Edite .env conforme necessário
+pip install -e ".[claude,dev]"
 ```
 
----
-
-## Como Usar
-
-### Via CLI
+### 2. Configure o `.env`
 
 ```bash
-# Workflow A: Ideia → PRD (com mock provider)
-factory idea "App de gestão de tarefas para times remotos" --project taskflow-saas
-
-# Com Claude API
-factory idea "Seu produto aqui" --project meu-projeto --provider claude
-
-# Workflow D: Auditoria
-factory audit taskflow-saas --scope full
-
-# Ver agentes registrados
-factory agents
+cp .env.example .env
 ```
 
-### Via Python
+Edite `.env`:
+
+```env
+DEFAULT_PROVIDER=claude
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Opcional — MCPs adicionais
+GITHUB_TOKEN=ghp_...
+BRAVE_API_KEY=BSA...
+```
+
+### 3. (Opcional) Instale MCPs
+
+```bash
+npm install -g @modelcontextprotocol/server-github
+npm install -g @modelcontextprotocol/server-brave-search
+```
+
+### 4. Crie o vault para o novo projeto
+
+O vault é um diretório local que vira um cofre Obsidian. Configure o path em `.env` ou use o padrão `./vault`:
+
+```env
+VAULT_PATH=C:/Users/seu-usuario/Documents/laac
+```
+
+Abra no Obsidian: `File > Open Vault > selecione o diretório`.
+
+### 5. Rode o Workflow A — Idea to PRD
+
+```bash
+python scripts/factory_cli.py --mode workflow --workflow idea-to-prd
+# Input: "App de gestão de tarefas para times remotos"
+```
+
+Ou via Python:
 
 ```python
 import asyncio
@@ -110,142 +144,118 @@ from src.orchestrator.manager import Orchestrator
 from src.workflows.idea_to_prd import run_idea_to_prd
 
 async def main():
-    orchestrator = Orchestrator(vault_path="./vault")
-
+    orch = Orchestrator(vault_path="./vault")
     snapshot = await run_idea_to_prd(
-        orchestrator=orchestrator,
+        orchestrator=orch,
         project_id="meu-saas",
         raw_idea="Plataforma de cursos online focada em desenvolvedores",
         target_audience="Devs plenos e seniors em transição de carreira",
     )
-
     print(f"Status: {snapshot.status}")
-    print(f"Steps: {snapshot.steps_completed}")
-    print(f"Tokens usados: {snapshot.token_budget_used}")
+    print(f"Tokens: {snapshot.token_budget_used}")
 
 asyncio.run(main())
 ```
 
-### Tarefa Avulsa
-
-```python
-from src.orchestrator.manager import Orchestrator
-from src.schemas.task import AgentRole
-
-async def main():
-    orch = Orchestrator()
-
-    # Invocar qualquer agente diretamente
-    response = await orch.run_task(
-        role=AgentRole.PRODUCT,
-        objective="Criar PRD para marketplace de freelancers",
-        project_id="freela-hub",
-        depth="deep",
-    )
-    print(response.summary)
-    print(response.content)
-```
-
----
-
-## Memória em Obsidian
-
-Todo resultado significativo é salvo como nota markdown no vault. Abra o vault no Obsidian para visualizar o grafo de conhecimento dos seus projetos.
-
-```
-vault/
-  _system/          → princípios e registry de agentes
-  Projects/         → nota-mestre por projeto
-  PRDs/             → PRDs versionados
-  Decisions/        → ADRs e decisões importantes
-  Research/         → análises de mercado
-  Marketing/        → planos GTM
-  QA/               → relatórios de revisão
-  Agents/           → logs por agente
-  Snapshots/        → histórico de execuções
-  Templates/        → templates para novas notas
-```
-
-### Frontmatter padrão de cada nota
-
-```yaml
----
-slug: taskflow-saas-prd-v1
-title: "PRD: TaskFlow SaaS v1.0"
-type: prd
-project_id: taskflow-saas
-tags: [prd, taskflow-saas]
-summary: "PRD v1.0 com 4 features MVP para gestão inteligente de tarefas"
-created: 2026-06-05
----
-```
-
----
-
-## Eficiência de Tokens
-
-A fábrica é desenhada para minimizar tokens sem perder qualidade de coordenação.
-
-**Princípios:**
-- Cada agente recebe apenas o contexto mínimo para sua tarefa
-- Histórico completo nunca é carregado — apenas resumos progressivos
-- Notas do vault entram como `summary` (~150 tokens), não como conteúdo completo
-- `depth: short | medium | deep` controla verbosidade da resposta
-- Manager é o guardião: verifica vault antes de criar nova tarefa
-
-**Camadas de contexto por chamada (máx. 4.096 tokens):**
-
-```
-[task]    400 tokens  → objetivo + critérios de aceite
-[agent]   200 tokens  → papel e responsabilidades
-[project] 500 tokens  → visão + PRD + status (quando necessário)
-[memory]  600 tokens  → notas seletivas do vault
-[global]  300 tokens  → princípios gerais (se couber)
-```
-
-Ver [docs/token_governance.md](docs/token_governance.md) para detalhes.
-
----
-
-## Estrutura do Projeto
-
-```
-life-as-a-company/
-  src/
-    core/           → BaseAgent, Registry, ContextGovernor
-    orchestrator/   → Orchestrator (coordenador central)
-    agents/         → 5 implementações de agente
-    prompts/        → system prompts em markdown
-    schemas/        → contratos Pydantic (ProjectBrief, PRD, etc.)
-    workflows/      → 4 workflows prontos para uso
-    memory/         → MemoryManager + ContextCompressor
-    obsidian/       → Writer + Reader do vault
-    providers/      → Mock + Claude + factory
-    config/         → Settings via pydantic-settings
-    utils/          → token counter, formatters
-    cli.py          → CLI com Typer
-  vault/            → Obsidian vault com templates e notas do sistema
-  examples/
-    taskflow_saas/  → exemplo ponta a ponta completo
-  tests/            → smoke tests e testes de integração
-  docs/             → arquitetura e governança de tokens
-```
-
----
-
-## Exemplo: TaskFlow SaaS
-
-Exemplo completo em [`examples/taskflow_saas/`](examples/taskflow_saas/):
+### 6. Chat com o Manager
 
 ```bash
-# Rodar o exemplo completo (mock provider, sem API)
-python -m examples.taskflow_saas.run_example
+python scripts/factory_cli.py --mode chat --project meu-saas
 ```
 
-Inclui:
-- [`artifacts/prd_v1.json`](examples/taskflow_saas/artifacts/prd_v1.json) — PRD completo do TaskFlow
-- [`artifacts/technical_plan_v1.json`](examples/taskflow_saas/artifacts/technical_plan_v1.json) — Plano técnico
-- [`vault/`](examples/taskflow_saas/vault/) — Vault com nota de projeto gerada
+O Manager usa tools em tempo real — você vê cada tool call colorido no terminal.
+
+---
+
+## Como Usar em Projetos Já Existentes (como Flouwy)
+
+O Flouwy é um app Next.js já existente. A fábrica se conecta ao codebase real via `flouwy_path`.
+
+### 1. Configure o path do projeto
+
+Em `.env`:
+
+```env
+FLOUWY_PATH=C:/Users/MarcusMoraes/Documents/GitHub/flowly
+```
+
+Ou em `src/config/settings.py`, o default já aponta para `flowly`.
+
+### 2. Rode um sprint de feature
+
+```bash
+python scripts/factory_cli.py --mode workflow --workflow flouwy-sprint
+# Input: "Add loading spinner ao dashboard"
+```
+
+O que acontece:
+1. **Manager** faz triage e monta plano
+2. **Product** atualiza a spec da feature
+3. **Engineer** usa `list_files` → `read_file` → `write_file` para implementar código real no repo `flowly`
+4. **QA** executa `npm run lint` e `npm run build` — se falhar, reporta o erro com recomendação de fix
+
+### 3. Tarefa direta no Engineer
+
+```bash
+python scripts/factory_cli.py --mode agent --role engineer
+# Input: "Refatorar src/components/flowly/Dashboard.tsx para usar shadcn Card"
+```
+
+### 4. Via Python
+
+```python
+import asyncio
+from src.orchestrator.manager import Orchestrator
+from src.workflows.flouwy_sprint import run_flouwy_sprint
+
+async def main():
+    orch = Orchestrator(vault_path="C:/Users/MarcusMoraes/Documents/laac")
+    snapshot = await run_flouwy_sprint(
+        orchestrator=orch,
+        feature_or_bug="Add empty state component to habits page",
+        sprint_type="feature",
+        project_id="flouwy",
+    )
+    print(snapshot.status)
+    print(snapshot.artifacts)
+
+asyncio.run(main())
+```
+
+### 5. Auditoria do projeto existente
+
+```bash
+python scripts/factory_cli.py --mode workflow --workflow project-audit --project flouwy
+```
+
+---
+
+## Workflows Disponíveis
+
+| Workflow | Comando CLI | Agentes envolvidos |
+|----------|-------------|-------------------|
+| Idea → PRD | `--workflow idea-to-prd` | Manager → Product → Marketing → QA |
+| PRD → Build | `--workflow prd-to-build` | Manager → Engineer → QA |
+| Product Improvement | `--workflow product-improvement` | Manager → Product + Marketing → Engineer → QA |
+| Project Audit | `--workflow project-audit` | Manager → QA → Product → Engineer |
+| Flouwy Sprint | `--workflow flouwy-sprint` | Manager → Product → Engineer → QA (com tools reais) |
+
+---
+
+## Testes
+
+```bash
+# Todos os testes (21 passando)
+python -m pytest tests/ -v
+
+# Com cobertura
+pytest --cov=src --cov-report=term-missing
+
+# Só smoke tests
+pytest tests/test_smoke.py -v
+```
+
+Testes usam mock provider automaticamente — sem custo de API.
 
 ---
 
@@ -254,11 +264,10 @@ Inclui:
 | Provider | Quando usar | Config |
 |----------|-------------|--------|
 | `mock` | Desenvolvimento, CI/CD, testes | Padrão, sem config |
-| `claude` | Produção com Claude | `ANTHROPIC_API_KEY` no `.env` |
-| `openai` | *Em breve* | `OPENAI_API_KEY` no `.env` |
+| `claude` | Produção, tool use real | `ANTHROPIC_API_KEY` no `.env` |
 
-```bash
-# Desenvolvimento (padrão)
+```env
+# Dev (padrão)
 DEFAULT_PROVIDER=mock
 
 # Produção
@@ -269,61 +278,32 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 ---
 
-## Testes
+## Memória em Obsidian
 
-```bash
-# Rodar todos os testes
-pytest
+Todo resultado significativo é salvo como nota markdown no vault. Abra no Obsidian para visualizar o grafo de conhecimento dos projetos.
 
-# Com cobertura
-pytest --cov=src --cov-report=term-missing
-
-# Só smoke tests
-pytest tests/test_smoke.py -v
-```
-
----
-
-## Integração com n8n (Fase 2)
-
-A arquitetura está preparada para integração com n8n:
-
-- Cada workflow pode ser exposto como webhook trigger
-- `AgentResponse` e `ExecutionSnapshot` são schemas JSON prontos para nós n8n
-- O vault Obsidian pode ser sincronizado via n8n com Notion, Google Drive, etc.
-- Providers podem ser adicionados via nós HTTP Request do n8n
-
----
-
-## Roadmap
-
-### Fase 1 (atual)
-- [x] 5 agentes com prompts reais
-- [x] 4 workflows principais
-- [x] Memória em Obsidian markdown
-- [x] Mock provider para desenvolvimento
-- [x] Claude API provider
-- [x] CLI com Typer
-- [x] Schemas Pydantic completos
-- [x] Smoke tests
-
-### Fase 2
-- [ ] OpenAI provider
-- [ ] Busca semântica na memória (embeddings)
-- [ ] Interface web básica
-- [ ] Integração n8n (webhooks)
-- [ ] Prompt caching (Claude API)
-- [ ] Novos agentes: Finance, Legal, Design
-- [ ] Multi-project dashboard
-- [ ] Export para Notion
+Ver `vault/INDEX.md` para a estrutura completa e convenções de naming.
 
 ---
 
 ## Arquitetura
 
-Ver [docs/architecture.md](docs/architecture.md) para diagramas Mermaid e detalhes de cada componente.
+Ver [`docs/architecture.md`](docs/architecture.md) para diagramas Mermaid detalhados do loop agêntico, EventBus, ToolExecutor e camada de MCPs.
 
 ---
 
-*Construído com Python 3.11 + Pydantic v2 + FastAPI ecosystem*
-*Memória em Obsidian · Providers plugáveis · Pronto para n8n*
+## Versão Atual: 0.2.0
+
+- [x] 5 agentes com prompts dedicados e tool use real
+- [x] 5 workflows (incluindo Flouwy Sprint)
+- [x] Loop agêntico (LLM → tool → LLM → end_turn)
+- [x] Prompt caching Claude API (~90% custo em cache hits)
+- [x] MCPs: GitHub, Brave Search, sequential-thinking, memory, git
+- [x] EventBus pub/sub + Rich CLI com cores por agente
+- [x] Segurança de paths por role (sem traversal)
+- [x] Mock provider para dev/CI sem API key
+- [x] 21 testes passando
+
+---
+
+*Python 3.11 · Pydantic v2 · Anthropic Claude · Obsidian vault · MCPs opcionais*
