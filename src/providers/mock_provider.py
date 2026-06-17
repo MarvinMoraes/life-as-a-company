@@ -1,3 +1,4 @@
+
 """Provider mock para testes e desenvolvimento sem API externa."""
 
 from __future__ import annotations

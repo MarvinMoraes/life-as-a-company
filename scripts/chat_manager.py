@@ -10,6 +10,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -47,36 +50,51 @@ def _render(data: dict, summary: str) -> str:
     return "\n".join(parts) if parts else summary
 
 
+def _read_file(path: Path, max_lines: int = 120) -> str:
+    """Lê um arquivo markdown com limite de linhas."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()[:max_lines]
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
 def _load_vault_context(vault: Path, project_id: str) -> str:
-    """Carrega contexto relevante do vault para o projeto."""
-    context_parts: list[str] = []
+    """Carrega contexto do vault em camadas priorizadas."""
+    sections: list[str] = []
 
-    # Pastas onde procurar arquivos do projeto
-    search_paths = [
-        vault / "Projects" / project_id,
-        vault / "PRDs" / project_id,
-        vault / "Decisions" / project_id,
-    ]
+    # Camada 1: perfil do usuário e regras globais (sempre carregado)
+    for system_file in ["MARCUS.md", "AGENTS.md"]:
+        path = vault / "_system" / system_file
+        if not path.exists():
+            path = vault / system_file  # fallback para raiz
+        content = _read_file(path, max_lines=80)
+        if content:
+            sections.append(f"\n=== {system_file} ===\n{content}")
 
-    for folder in search_paths:
+    # Camada 2: constituição e spec do projeto
+    project_dir = vault / "Projects" / project_id
+    for priority_file in ["SPEC.md", "spec/requirements.md", "spec/tasks.md"]:
+        path = project_dir / priority_file
+        content = _read_file(path, max_lines=100)
+        if content:
+            sections.append(f"\n=== {project_id}/{priority_file} ===\n{content}")
+
+    # Camada 3: demais arquivos do projeto (discovery, marketing, decisions)
+    for subdir in ["discovery", "marketing", "decisions"]:
+        folder = project_dir / subdir
         if folder.exists():
             for md_file in sorted(folder.glob("*.md")):
-                try:
-                    content = md_file.read_text(encoding="utf-8")
-                    # Inclui só as primeiras 100 linhas de cada arquivo
-                    lines = content.splitlines()[:100]
-                    context_parts.append(
-                        f"\n--- {md_file.name} ---\n" + "\n".join(lines)
-                    )
-                except Exception:
-                    pass
+                content = _read_file(md_file, max_lines=60)
+                if content:
+                    sections.append(f"\n--- {subdir}/{md_file.name} ---\n{content}")
 
-    if not context_parts:
-        return f"Projeto '{project_id}' — sem notas no vault ainda."
+    if not sections:
+        return f"Projeto '{project_id}' — sem contexto no vault."
 
     return (
-        f"Contexto do projeto '{project_id}' carregado do vault Obsidian "
-        f"({vault}):\n" + "\n".join(context_parts)
+        f"Vault: {vault} | Projeto: {project_id}\n"
+        + "\n".join(sections)
     )
 
 
@@ -157,10 +175,10 @@ async def main() -> None:
         pack = AgentContextPack(
             pack_id=f"pack-{uuid.uuid4().hex[:8]}",
             task=task,
-            token_budget=2048,
+            token_budget=8192,
         )
         pack.add_layer(ContextLayer(
-            layer_name="context",
+            layer_name="vault",
             content=context_summary,
             token_estimate=len(context_summary) // 4,
             source="vault_obsidian",
