@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 
 class BaseLLMProvider(ABC):
@@ -26,6 +27,21 @@ class BaseLLMProvider(ABC):
     ) -> str:
         """Envia uma mensagem ao LLM e retorna a resposta como string."""
         ...
+
+    async def complete_with_tools(
+        self,
+        system: str,
+        messages: list[dict],
+        tools: list[dict],
+        max_tokens: int = 4096,
+        use_cache: bool = False,
+    ) -> Any:
+        """Envia mensagens com tools e retorna o objeto Message raw.
+
+        Deve ser sobrescrito por providers que suportam tool use.
+        Retorna o objeto com .stop_reason e .content (list de blocos).
+        """
+        raise NotImplementedError(f"{self.provider_name} não suporta tool use.")
 
     @abstractmethod
     async def count_tokens(self, text: str) -> int:
