@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Awaitable, Callable
 
@@ -12,10 +13,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# No Windows, npm é um .cmd (batch script) — precisa de cmd /c para subprocess
+_NPM = ["cmd", "/c", "npm"] if sys.platform == "win32" else ["npm"]
+
 ALLOWED_COMMANDS: dict[str, list[str]] = {
-    "npm run build": ["npm", "run", "build"],
-    "npm run lint": ["npm", "run", "lint"],
-    "npm run dev": ["npm", "run", "dev"],
+    "npm run build": [*_NPM, "run", "build"],
+    "npm run lint": [*_NPM, "run", "lint"],
+    "npm run dev": [*_NPM, "run", "dev"],
 }
 
 _COMMAND_TIMEOUT = 120.0
