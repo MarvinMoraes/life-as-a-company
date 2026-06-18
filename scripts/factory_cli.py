@@ -271,6 +271,8 @@ async def _run_workflow(
     project: str,
     vault: str,
     live: Live,
+    feature: str = "",
+    sprint_type: str = "",
 ) -> None:
     from src.config.settings import get_settings
     from src.providers.claude_provider import ClaudeLLMProvider
@@ -294,9 +296,11 @@ async def _run_workflow(
     live.stop()
     if workflow_name == "flouwy-sprint":
         from src.workflows.flouwy_sprint import run_flouwy_sprint
-        feature = input("Descreva a feature ou bug: ").strip()
-        sprint_type_input = input("Tipo [feature/bug] (default: feature): ").strip() or "feature"
-        sprint_type = "bug" if sprint_type_input.startswith("b") else "feature"
+        if not feature:
+            feature = input("Descreva a feature ou bug: ").strip()
+        if not sprint_type:
+            sprint_type_input = input("Tipo [feature/bug] (default: feature): ").strip() or "feature"
+            sprint_type = "bug" if sprint_type_input.startswith("b") else "feature"
     else:
         console.print(f"[red]Workflow desconhecido: {workflow_name}[/red]")
         console.print("Disponíveis: flouwy-sprint, idea-to-prd, prd-to-build, product-improvement, project-audit")
@@ -340,6 +344,8 @@ def main(
     project: str = typer.Option("flouwy", "--project", "-p", help="ID do projeto no vault"),
     workflow: str = typer.Option("flouwy-sprint", "--workflow", "-w", help="Nome do workflow"),
     vault: str = typer.Option("", "--vault", "-v", help="Caminho do vault Obsidian"),
+    feature: str = typer.Option("", "--feature", "-f", help="Feature/bug para flouwy-sprint (evita input interativo)"),
+    sprint_type: str = typer.Option("feature", "--sprint-type", help="feature | bug"),
 ) -> None:
     """SaaS Factory — CLI multi-agente com display em tempo real."""
     display = CLIDisplay()
@@ -360,7 +366,7 @@ def main(
         if mode == "chat":
             asyncio.run(_run_chat(display, project, vault, live))
         elif mode == "workflow":
-            asyncio.run(_run_workflow(display, workflow, project, vault, live))
+            asyncio.run(_run_workflow(display, workflow, project, vault, live, feature, sprint_type))
         else:
             display.print_line(f"Modo desconhecido: {mode}. Use: chat | workflow", "red")
 
