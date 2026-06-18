@@ -160,10 +160,28 @@ class ToolExecutor:
         resolved_dir = self._try_resolve(directory, roots)
         if not resolved_dir.exists():
             return f"ERROR: Diretório não encontrado: {directory}"
-        matches = sorted(str(p.relative_to(roots[0])) for p in resolved_dir.glob(pattern) if p.is_file())
+
+        _EXCLUDE = {".next", "node_modules", ".git", "__pycache__", ".venv", "dist", "build", ".cache", ".turbo"}
+        _LIMIT = 60
+
+        matches: list[str] = []
+        for p in resolved_dir.glob(pattern):
+            if not p.is_file():
+                continue
+            rel = p.relative_to(roots[0])
+            if any(part in _EXCLUDE for part in rel.parts):
+                continue
+            matches.append(str(rel))
+
+        matches.sort()
+
         if not matches:
             return f"Nenhum arquivo encontrado em '{directory}' com pattern '{pattern}'"
-        return "\n".join(matches[:100])  # limita a 100 resultados
+
+        result = "\n".join(matches[:_LIMIT])
+        if len(matches) > _LIMIT:
+            result += f"\n\n[{len(matches) - _LIMIT} arquivos adicionais omitidos — refine o pattern ou use um subdiretório específico]"
+        return result
 
     # ------------------------------------------------------------------
     # Shell
