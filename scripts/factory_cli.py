@@ -6,7 +6,7 @@ import asyncio
 import sys
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -369,6 +369,33 @@ async def _run_workflow(
         traceback.print_exc()
 
 
+def _render_content(data: Any) -> None:
+    """Imprime o payload de um agente. O shape varia por papel, então trata
+    dict/list/str genericamente em vez de assumir chaves fixas."""
+    if not data:
+        return
+    if isinstance(data, str):
+        console.print(data)
+        return
+    if isinstance(data, list):
+        for item in data:
+            if isinstance(item, (dict, list)):
+                _render_content(item)
+            else:
+                console.print(f"  • {item}")
+        return
+    if isinstance(data, dict):
+        for key, value in data.items():
+            label = str(key).replace("_", " ").capitalize()
+            if isinstance(value, (dict, list)):
+                console.print(f"\n[bold]{label}:[/bold]")
+                _render_content(value)
+            elif value not in (None, "", []):
+                console.print(f"[bold]{label}:[/bold] {value}")
+        return
+    console.print(str(data))
+
+
 async def _run_agent(
     display: CLIDisplay,
     agent_name: str,
@@ -426,6 +453,13 @@ async def _run_agent(
         style = ROLE_STYLE.get(agent_name, "white")
         console.rule(f"[bold {style}]{agent_name}[/bold {style}]")
         console.print(f"[white]{resp.summary}[/white]")
+        # No modo agent nao ha Manager consumindo resp.content — sem isso o
+        # deliverable do agente se perde e so sobra o resumo de 100 palavras.
+        _render_content(resp.content)
+        if resp.follow_up_tasks:
+            console.print("\n[bold]Follow-ups sugeridos:[/bold]")
+            for task in resp.follow_up_tasks:
+                console.print(f"  • {task}")
         console.print()
         live.start()
     except Exception as e:
