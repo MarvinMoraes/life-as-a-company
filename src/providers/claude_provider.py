@@ -23,7 +23,7 @@ class ClaudeLLMProvider(BaseLLMProvider):
     def __init__(
         self,
         api_key: str,
-        model: str = "claude-sonnet-4-6",
+        model: str = "claude-sonnet-5",
         prompt_caching: bool = True,
     ) -> None:
         try:
@@ -34,6 +34,21 @@ class ClaudeLLMProvider(BaseLLMProvider):
         self._client = anthropic.AsyncAnthropic(api_key=api_key)
         self.model = model
         self.prompt_caching = prompt_caching
+
+    def for_model(self, model: str) -> "ClaudeLLMProvider":
+        """Retorna um provider irmão para outro modelo, reusando o mesmo client.
+
+        Usado pelo Orchestrator para rotear cada papel ao seu modelo
+        (Manager→Opus 4.8, execução→Sonnet 5, simples→Haiku 4.5) sem
+        recriar o AsyncAnthropic client a cada agente.
+        """
+        if model == self.model:
+            return self
+        clone = ClaudeLLMProvider.__new__(ClaudeLLMProvider)
+        clone._client = self._client
+        clone.model = model
+        clone.prompt_caching = self.prompt_caching
+        return clone
 
     async def complete(
         self,

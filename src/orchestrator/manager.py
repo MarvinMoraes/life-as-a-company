@@ -52,6 +52,19 @@ class Orchestrator:
         self._setup_agents()
         logger.info("Orchestrator inicializado. Vault: %s | tools=%s", self.vault_path, enable_tools)
 
+    def _provider_for_role(self, role: AgentRole) -> BaseLLMProvider:
+        """Seleciona o provider/modelo correto para cada papel.
+
+        Manager usa Opus 4.8 (orquestração/planejamento), execução usa
+        Sonnet 5, agentes mais simples usam Haiku 4.5 — configurável no .env.
+        Providers sem `for_model` (mock) usam o modelo único.
+        """
+        if not hasattr(self.provider, "for_model"):
+            return self.provider
+        from ..config.settings import get_settings
+        model = get_settings().model_for_role(role.value)
+        return self.provider.for_model(model)
+
     def _setup_agents(self) -> None:
         """Instancia e registra todos os agentes, com tools quando disponíveis."""
         from ..config.settings import get_settings
@@ -60,13 +73,16 @@ class Orchestrator:
 
         prompts = PromptLoader.load_all()
 
+        def _provider(role: AgentRole) -> BaseLLMProvider:
+            return self._provider_for_role(role)
+
         if not self.enable_tools:
             # Modo legado: sem tools (para testes com mock provider)
-            self.registry.register(ManagerAgent(self.provider, prompts[AgentRole.MANAGER]))
-            self.registry.register(EngineerAgent(self.provider, prompts[AgentRole.ENGINEER]))
-            self.registry.register(ProductAgent(self.provider, prompts[AgentRole.PRODUCT]))
-            self.registry.register(MarketingAgent(self.provider, prompts[AgentRole.MARKETING]))
-            self.registry.register(QAAgent(self.provider, prompts[AgentRole.QA]))
+            self.registry.register(ManagerAgent(_provider(AgentRole.MANAGER), prompts[AgentRole.MANAGER]))
+            self.registry.register(EngineerAgent(_provider(AgentRole.ENGINEER), prompts[AgentRole.ENGINEER]))
+            self.registry.register(ProductAgent(_provider(AgentRole.PRODUCT), prompts[AgentRole.PRODUCT]))
+            self.registry.register(MarketingAgent(_provider(AgentRole.MARKETING), prompts[AgentRole.MARKETING]))
+            self.registry.register(QAAgent(_provider(AgentRole.QA), prompts[AgentRole.QA]))
             logger.info("Agentes registrados (sem tools): %s", [a["name"] for a in self.registry.list_agents()])
             return
 
@@ -100,28 +116,32 @@ class Orchestrator:
             )
 
         self.registry.register(ManagerAgent(
-            self.provider,
+            _provider(AgentRole.MANAGER),
             prompts[AgentRole.MANAGER],
             tool_executor=_make_executor(AgentRole.MANAGER, with_delegation=True),
             agent_caller=_agent_caller,
         ))
         self.registry.register(EngineerAgent(
-            self.provider, prompts[AgentRole.ENGINEER],
+            _provider(AgentRole.ENGINEER), prompts[AgentRole.ENGINEER],
             tool_executor=_make_executor(AgentRole.ENGINEER),
         ))
         self.registry.register(ProductAgent(
-            self.provider, prompts[AgentRole.PRODUCT],
+            _provider(AgentRole.PRODUCT), prompts[AgentRole.PRODUCT],
             tool_executor=_make_executor(AgentRole.PRODUCT),
         ))
         self.registry.register(MarketingAgent(
-            self.provider, prompts[AgentRole.MARKETING],
+            _provider(AgentRole.MARKETING), prompts[AgentRole.MARKETING],
             tool_executor=_make_executor(AgentRole.MARKETING),
         ))
         self.registry.register(QAAgent(
-            self.provider, prompts[AgentRole.QA],
+            _provider(AgentRole.QA), prompts[AgentRole.QA],
             tool_executor=_make_executor(AgentRole.QA),
         ))
-        logger.info("Agentes registrados (com tools): %s", [a["name"] for a in self.registry.list_agents()])
+        models = {
+            a.role.value: getattr(a.provider, "model", "?")
+            for a in self.registry._agents.values()
+        }
+        logger.info("Agentes registrados (com tools) — modelos por papel: %s", models)
 
     async def run_task(
         self,

@@ -293,17 +293,30 @@ async def _run_workflow(
         enable_tools=True,
     )
 
+    # Coleta de inputs fora do Live (permite input interativo)
     live.stop()
+    wf_inputs: dict = {}
     if workflow_name == "flouwy-sprint":
-        from src.workflows.flouwy_sprint import run_flouwy_sprint
         if not feature:
             feature = input("Descreva a feature ou bug: ").strip()
         if not sprint_type:
             sprint_type_input = input("Tipo [feature/bug] (default: feature): ").strip() or "feature"
             sprint_type = "bug" if sprint_type_input.startswith("b") else "feature"
+    elif workflow_name == "idea-to-prd":
+        wf_inputs["idea"] = feature or input("Descreva a ideia: ").strip()
+        wf_inputs["audience"] = input("Público-alvo (opcional): ").strip()
+    elif workflow_name == "product-improvement":
+        wf_inputs["feedback"] = feature or input("Feedback dos usuários: ").strip()
+    elif workflow_name == "project-audit":
+        wf_inputs["scope"] = sprint_type or input("Escopo [full/technical/product] (default full): ").strip() or "full"
+    elif workflow_name == "prd-to-build":
+        wf_inputs["title"] = feature or input("Título do produto: ").strip()
+        wf_inputs["problem"] = input("Problema que resolve: ").strip()
+        wf_inputs["solution"] = input("Solução proposta: ").strip()
     else:
         console.print(f"[red]Workflow desconhecido: {workflow_name}[/red]")
         console.print("Disponíveis: flouwy-sprint, idea-to-prd, prd-to-build, product-improvement, project-audit")
+        live.start()
         return
     live.start()
 
@@ -311,7 +324,29 @@ async def _run_workflow(
 
     try:
         if workflow_name == "flouwy-sprint":
+            from src.workflows.flouwy_sprint import run_flouwy_sprint
             snapshot = await run_flouwy_sprint(orch, feature, sprint_type, project)
+        elif workflow_name == "idea-to-prd":
+            from src.workflows.idea_to_prd import run_idea_to_prd
+            snapshot = await run_idea_to_prd(orch, project, wf_inputs["idea"], wf_inputs.get("audience", ""))
+        elif workflow_name == "product-improvement":
+            from src.workflows.product_improvement import run_product_improvement
+            snapshot = await run_product_improvement(orch, project, wf_inputs["feedback"])
+        elif workflow_name == "project-audit":
+            from src.workflows.project_audit import run_project_audit
+            snapshot = await run_project_audit(orch, project, wf_inputs["scope"])
+        elif workflow_name == "prd-to-build":
+            from src.workflows.prd_to_build import run_prd_to_build
+            from src.schemas.project import PRD
+            prd = PRD(
+                project_id=project,
+                title=wf_inputs["title"],
+                executive_summary=f"{wf_inputs['problem']} {wf_inputs['solution']}"[:200],
+                problem=wf_inputs["problem"],
+                solution=wf_inputs["solution"],
+                value_proposition=wf_inputs["solution"][:120] or wf_inputs["title"],
+            )
+            snapshot = await run_prd_to_build(orch, project, prd)
         else:
             snapshot = None
 
@@ -334,6 +369,72 @@ async def _run_workflow(
         traceback.print_exc()
 
 
+async def _run_agent(
+    display: CLIDisplay,
+    agent_name: str,
+    project: str,
+    vault: str,
+    live: Live,
+    objective: str = "",
+) -> None:
+    """Executa um único agente diretamente (modo agent)."""
+    from src.config.settings import get_settings
+    from src.providers.claude_provider import ClaudeLLMProvider
+    from src.orchestrator.manager import Orchestrator
+    from src.schemas.task import AgentRole
+
+    settings = get_settings()
+    if not settings.anthropic_api_key:
+        display.print_line("[Erro] ANTHROPIC_API_KEY nao encontrada.", "bold red")
+        return
+
+    try:
+        role = AgentRole(agent_name)
+    except ValueError:
+        display.print_line(
+            f"Agente desconhecido: {agent_name}. Use: manager | engineer | product | marketing | qa", "red"
+        )
+        return
+
+    provider = ClaudeLLMProvider(
+        api_key=settings.anthropic_api_key,
+        prompt_caching=settings.prompt_caching_enabled,
+    )
+    orch = Orchestrator(
+        vault_path=vault or str(settings.vault_dir),
+        provider=provider,
+        enable_tools=True,
+    )
+
+    live.stop()
+    if not objective:
+        try:
+            objective = input(f"Objetivo para {agent_name}: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            objective = ""
+    live.start()
+    if not objective:
+        return
+
+    from src.events import AgentEvent, EventBus, EventType as ET
+    EventBus.global_bus().emit(AgentEvent(ET.AGENT_START, agent_name, {"objective": objective}))
+    try:
+        resp = await orch.run_task(role=role, objective=objective, project_id=project, depth="medium")
+        EventBus.global_bus().emit(AgentEvent(ET.AGENT_END, agent_name, {"summary": resp.summary}))
+        live.stop()
+        console.print()
+        style = ROLE_STYLE.get(agent_name, "white")
+        console.rule(f"[bold {style}]{agent_name}[/bold {style}]")
+        console.print(f"[white]{resp.summary}[/white]")
+        console.print()
+        live.start()
+    except Exception as e:
+        EventBus.global_bus().emit(AgentEvent(ET.ERROR, agent_name, {"error": str(e)}))
+        live.stop()
+        console.print(f"[red][Erro] {e}[/red]")
+        live.start()
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -342,10 +443,12 @@ async def _run_workflow(
 def main(
     mode: str = typer.Option("chat", "--mode", "-m", help="chat | workflow | agent"),
     project: str = typer.Option("flouwy", "--project", "-p", help="ID do projeto no vault"),
-    workflow: str = typer.Option("flouwy-sprint", "--workflow", "-w", help="Nome do workflow"),
+    workflow: str = typer.Option("flouwy-sprint", "--workflow", "-w", help="flouwy-sprint | idea-to-prd | prd-to-build | product-improvement | project-audit"),
     vault: str = typer.Option("", "--vault", "-v", help="Caminho do vault Obsidian"),
-    feature: str = typer.Option("", "--feature", "-f", help="Feature/bug para flouwy-sprint (evita input interativo)"),
-    sprint_type: str = typer.Option("feature", "--sprint-type", help="feature | bug"),
+    feature: str = typer.Option("", "--feature", "-f", help="Input principal do workflow (evita input interativo)"),
+    sprint_type: str = typer.Option("feature", "--sprint-type", help="flouwy-sprint: feature|bug · project-audit: full|technical|product"),
+    agent: str = typer.Option("engineer", "--agent", "-a", help="Agente para modo agent: manager|engineer|product|marketing|qa"),
+    objective: str = typer.Option("", "--objective", "-o", help="Objetivo do agente (modo agent, evita input interativo)"),
 ) -> None:
     """SaaS Factory — CLI multi-agente com display em tempo real."""
     display = CLIDisplay()
@@ -367,8 +470,10 @@ def main(
             asyncio.run(_run_chat(display, project, vault, live))
         elif mode == "workflow":
             asyncio.run(_run_workflow(display, workflow, project, vault, live, feature, sprint_type))
+        elif mode == "agent":
+            asyncio.run(_run_agent(display, agent, project, vault, live, objective))
         else:
-            display.print_line(f"Modo desconhecido: {mode}. Use: chat | workflow", "red")
+            display.print_line(f"Modo desconhecido: {mode}. Use: chat | workflow | agent", "red")
 
 
 if __name__ == "__main__":

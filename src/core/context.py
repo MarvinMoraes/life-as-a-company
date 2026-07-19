@@ -49,6 +49,26 @@ class ContextGovernor:
     ) -> None:
         self.memory = memory_manager
         self.default_budget = default_budget
+        self._user_profile: str | None = None
+        self._principles: str | None = None
+
+    async def _load_user_profile(self) -> str:
+        """Carrega o perfil do Marcus (vault/_system/MARCUS.md), cacheado."""
+        if self._user_profile is None:
+            note = await self.memory.get_note("MARCUS")
+            self._user_profile = note.content[:1400] if note else ""
+        return self._user_profile
+
+    async def _load_principles(self) -> str:
+        """Carrega os princípios da fábrica (vault/_system/FACTORY_PRINCIPLES.md).
+
+        Fonte única de verdade: lê o arquivo do vault. Só usa o texto
+        inline como fallback se o arquivo não existir.
+        """
+        if self._principles is None:
+            note = await self.memory.get_note("FACTORY_PRINCIPLES")
+            self._principles = note.content[:1500] if note else self.GLOBAL_CONTEXT
+        return self._principles
 
     async def assemble(
         self,
@@ -74,6 +94,16 @@ class ContextGovernor:
         )
         pack.add_layer(task_layer)
 
+        # Camada 1.5: Perfil do usuário (Marcus) — lido do vault/_system/MARCUS.md
+        user_profile = await self._load_user_profile()
+        if user_profile:
+            pack.add_layer(ContextLayer(
+                layer_name="user",
+                content=user_profile,
+                token_estimate=self._estimate(user_profile),
+                source="_system/MARCUS.md",
+            ))
+
         # Camada 2: Agent identity
         agent_layer = ContextLayer(
             layer_name="agent",
@@ -94,23 +124,28 @@ class ContextGovernor:
             pack.add_layer(proj_layer)
 
         # Camada 4: Memory retrieval (notas relevantes do vault)
+        # 1º tenta hints explícitos (slug exato); se vazio, faz busca por
+        # relevância no vault — assim o chat também recupera memória.
+        memory_content = ""
         if task.memory_hints:
             memory_content = await self._retrieve_memory(task.memory_hints, task.project_id)
-            if memory_content:
-                mem_layer = ContextLayer(
-                    layer_name="memory",
-                    content=memory_content,
-                    token_estimate=self._estimate(memory_content),
-                    source="obsidian_vault",
-                )
-                pack.add_layer(mem_layer)
+        if not memory_content:
+            memory_content = await self._search_memory(task.objective, task.project_id)
+        if memory_content:
+            pack.add_layer(ContextLayer(
+                layer_name="memory",
+                content=memory_content,
+                token_estimate=self._estimate(memory_content),
+                source="obsidian_vault",
+            ))
 
-        # Camada 5: Global context (inclui se couber)
+        # Camada 5: Global context — princípios lidos do vault/_system/FACTORY_PRINCIPLES.md
+        principles = await self._load_principles()
         global_layer = ContextLayer(
             layer_name="global",
-            content=self.GLOBAL_CONTEXT,
-            token_estimate=self._estimate(self.GLOBAL_CONTEXT),
-            source="factory_config",
+            content=principles,
+            token_estimate=self._estimate(principles),
+            source="_system/FACTORY_PRINCIPLES.md",
         )
         pack.add_layer(global_layer)  # add_layer retorna False silenciosamente se não couber
 
@@ -121,13 +156,25 @@ class ContextGovernor:
         return pack
 
     async def _retrieve_memory(self, hints: list[str], project_id: str | None) -> str:
-        """Recupera e concatena notas relevantes do vault."""
+        """Recupera e concatena notas relevantes do vault por slug exato."""
         notes = []
         for slug in hints:
             note = await self.memory.get_note(slug)
             if note:
                 notes.append(f"### [{slug}]\n{note.summary or note.content[:400]}")
         return "\n\n".join(notes)
+
+    async def _search_memory(self, query: str, project_id: str | None) -> str:
+        """Busca notas relevantes por relevância (fallback sem slug exato)."""
+        if not query:
+            return ""
+        try:
+            notes = await self.memory.search(query, project_id=project_id, limit=3)
+        except Exception:  # busca é best-effort — nunca deve quebrar a tarefa
+            return ""
+        return "\n\n".join(
+            f"### [{n.slug}]\n{n.summary or n.content[:300]}" for n in notes
+        )
 
     @staticmethod
     def _format_task(task: TaskBrief) -> str:

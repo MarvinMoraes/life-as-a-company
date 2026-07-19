@@ -22,7 +22,16 @@ class Settings(BaseSettings):
     # Providers
     anthropic_api_key: str = ""
     default_provider: str = "mock"
-    default_model: str = "claude-sonnet-4-6"
+
+    # Model routing por papel — orquestração usa o modelo mais forte,
+    # execução usa Sonnet 5, agentes mais simples usam Haiku 4.5.
+    # Todos configuráveis via .env (ex: MODEL_MANAGER=claude-opus-4-8).
+    default_model: str = "claude-sonnet-5"
+    model_manager: str = "claude-opus-4-8"     # orquestração / planejamento
+    model_engineer: str = "claude-sonnet-5"    # execução de código
+    model_product: str = "claude-sonnet-5"     # specs / PRDs
+    model_qa: str = "claude-haiku-4-5"         # verificação / checagem
+    model_marketing: str = "claude-haiku-4-5"  # copy / marketing
 
     # Token governance
     max_tokens_per_call: int = 4096
@@ -51,6 +60,16 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
     log_format: str = "rich"
+
+    def model_for_role(self, role: str) -> str:
+        """Retorna o model id configurado para um papel de agente."""
+        return {
+            "manager": self.model_manager,
+            "engineer": self.model_engineer,
+            "product": self.model_product,
+            "qa": self.model_qa,
+            "marketing": self.model_marketing,
+        }.get(role, self.default_model)
 
     @property
     def vault_dir(self) -> Path:
