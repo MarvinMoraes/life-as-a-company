@@ -9,7 +9,7 @@
 | Camada | Tecnologia |
 |--------|-----------|
 | Runtime | Python 3.11+ |
-| LLM | Anthropic Claude (claude-sonnet-4-6) |
+| LLM | Anthropic Claude — roteamento por papel (Opus 4.8 / Sonnet 5 / Haiku 4.5) |
 | Tool Use | Anthropic function calling + MCP servers |
 | Schemas | Pydantic v2 |
 | Memória | Obsidian markdown (vault local) |
@@ -32,15 +32,27 @@
 
 ## Os 5 Agentes
 
-| Agente | Papel | Tools |
-|--------|-------|-------|
-| **Manager** | Orquestra, delega, controla contexto | delegate, read/write vault, GitHub |
-| **Product** | Discovery, PRD, personas, roadmap | read/write vault, web_search |
-| **Engineer** | Arquitetura, código real, PRs | read/write/list flouwy, GitHub, git |
-| **Marketing** | Mercado, posicionamento, GTM | read/write vault, web_search |
-| **QA** | Revisão, lint, build, veredictos | read flouwy, npm run lint/build |
+| Agente | Papel | Modelo (default) | Tools |
+|--------|-------|------------------|-------|
+| **Manager** | Orquestra, delega, controla contexto | `claude-opus-4-8` | delegate, read/write vault, GitHub |
+| **Product** | Discovery, PRD, personas, roadmap | `claude-sonnet-5` | read/write vault, web_search |
+| **Engineer** | Arquitetura, código real, PRs | `claude-sonnet-5` | read/write/list flouwy, GitHub, git |
+| **Marketing** | Mercado, posicionamento, GTM | `claude-haiku-4-5` | read/write vault, web_search |
+| **QA** | Revisão, lint, build, veredictos | `claude-haiku-4-5` | read flouwy, npm run lint/build |
 
 Agentes não se comunicam diretamente — tudo passa pelo Manager via closure `_agent_caller`.
+
+### Model Routing por Papel
+
+Cada agente roda no modelo adequado ao seu trabalho: **orquestração** no modelo mais forte, **execução** de código/specs num modelo intermediário, e tarefas mais simples num modelo econômico. Isso equilibra qualidade e custo automaticamente.
+
+| Papel | Modelo | Racional |
+|-------|--------|----------|
+| Manager | Opus 4.8 (`MODEL_MANAGER`) | orquestração, planejamento, delegação |
+| Engineer / Product | Sonnet 5 (`MODEL_ENGINEER` / `MODEL_PRODUCT`) | execução de código e specs |
+| QA / Marketing | Haiku 4.5 (`MODEL_QA` / `MODEL_MARKETING`) | verificação e copy (alto volume) |
+
+Todos configuráveis via `.env`. Sob o capô, `settings.model_for_role()` resolve o modelo e `ClaudeLLMProvider.for_model()` cria um provider-irmão reusando o mesmo client HTTP (sem recriar conexão por agente). A delegação Manager→outros herda o roteamento automaticamente.
 
 ---
 
@@ -85,7 +97,7 @@ life-as-a-company/
 ### 1. Clone e configure o ambiente
 
 ```bash
-git clone https://github.com/MarcusMGS/life-as-a-company.git
+git clone https://github.com/MarvinMoraes/life-as-a-company.git
 cd life-as-a-company
 
 python -m venv .venv
@@ -194,12 +206,16 @@ O que acontece:
 3. **Engineer** usa `list_files` → `read_file` → `write_file` para implementar código real no repo `flowly`
 4. **QA** executa `npm run lint` e `npm run build` — se falhar, reporta o erro com recomendação de fix
 
-### 3. Tarefa direta no Engineer
+### 3. Tarefa direta num agente (modo `agent`)
+
+Executa um único agente isolado, no modelo roteado do papel:
 
 ```bash
-python scripts/factory_cli.py --mode agent --role engineer
-# Input: "Refatorar src/components/flowly/Dashboard.tsx para usar shadcn Card"
+python scripts/factory_cli.py --mode agent --agent engineer \
+  --objective "Refatorar src/components/flowly/Dashboard.tsx para usar shadcn Card"
 ```
+
+`--agent` aceita `manager | engineer | product | marketing | qa`. Sem `--objective`, o CLI pergunta interativamente.
 
 ### 4. Via Python
 
@@ -272,8 +288,15 @@ DEFAULT_PROVIDER=mock
 
 # Produção
 DEFAULT_PROVIDER=claude
-DEFAULT_MODEL=claude-sonnet-4-6
 ANTHROPIC_API_KEY=sk-ant-...
+
+# Model routing por papel (defaults abaixo — ajuste conforme custo/qualidade)
+DEFAULT_MODEL=claude-sonnet-5
+MODEL_MANAGER=claude-opus-4-8
+MODEL_ENGINEER=claude-sonnet-5
+MODEL_PRODUCT=claude-sonnet-5
+MODEL_QA=claude-haiku-4-5
+MODEL_MARKETING=claude-haiku-4-5
 ```
 
 ---
@@ -281,6 +304,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 ## Memória em Obsidian
 
 Todo resultado significativo é salvo como nota markdown no vault. Abra no Obsidian para visualizar o grafo de conhecimento dos projetos.
+
+O `ContextGovernor` injeta memória em cada tarefa: o perfil do usuário (`vault/_system/MARCUS.md`) e os princípios da fábrica (`vault/_system/FACTORY_PRINCIPLES.md`) entram como camadas de contexto, e notas relevantes são recuperadas por slug exato (`memory_hints`) ou, na ausência delas, por busca de relevância no vault.
 
 Ver `vault/INDEX.md` para a estrutura completa e convenções de naming.
 
@@ -295,8 +320,11 @@ Ver [`docs/architecture.md`](docs/architecture.md) para diagramas Mermaid detalh
 ## Versão Atual: 0.2.0
 
 - [x] 5 agentes com prompts dedicados e tool use real
-- [x] 5 workflows (incluindo Flouwy Sprint)
+- [x] Model routing por papel (Opus 4.8 / Sonnet 5 / Haiku 4.5, configurável no `.env`)
+- [x] 5 workflows (incluindo Flouwy Sprint) — todos acessíveis pela CLI
+- [x] 3 modos de CLI: `chat`, `workflow`, `agent`
 - [x] Loop agêntico (LLM → tool → LLM → end_turn)
+- [x] Contexto `_system` (MARCUS.md + FACTORY_PRINCIPLES.md) injetado por tarefa
 - [x] Prompt caching Claude API (~90% custo em cache hits)
 - [x] MCPs: GitHub, Brave Search, sequential-thinking, memory, git
 - [x] EventBus pub/sub + Rich CLI com cores por agente
