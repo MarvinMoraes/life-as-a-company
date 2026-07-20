@@ -20,6 +20,11 @@ from ..schemas.task import AgentRole, TaskBrief
 
 logger = logging.getLogger(__name__)
 
+# O status vem do JSON gerado pelo proprio modelo, entao e um conjunto aberto
+# (o QA ja devolveu 'blocked' por conta propria). Listamos o que conta como
+# sucesso e tratamos o resto como degradado, em vez do contrario.
+_SUCCESS_STATUSES = {"success", "completed"}
+
 
 class Orchestrator:
     """Ponto central de coordenação da fábrica.
@@ -205,6 +210,7 @@ class Orchestrator:
         )
 
         results: dict[str, Any] = {}
+        degraded: list[str] = []
 
         for step in steps:
             step_name = step.get("name", f"step-{len(snapshot.steps_completed)}")
@@ -235,11 +241,13 @@ class Orchestrator:
             if step_name in snapshot.steps_pending:
                 snapshot.steps_pending.remove(step_name)
 
-            # Salva artefato resumido no snapshot
+            # Guarda o content junto do resumo: sem ele o deliverable do step
+            # some e o snapshot vira so uma lista de nomes de step.
             snapshot.artifacts[step_name] = {
                 "agent": step["agent"],
                 "status": response.status,
                 "summary": response.summary,
+                "content": response.content,
             }
             snapshot.token_budget_used += response.tokens_used
 
@@ -248,8 +256,18 @@ class Orchestrator:
                 snapshot.error = f"Step '{step_name}' falhou."
                 break
 
+            # 'partial' (resposta truncada em max_tokens), 'blocked' (agente sem
+            # insumo) etc. nao sao sucesso — antes passavam batido e o workflow
+            # reportava 'completed' com todos os steps degradados.
+            if response.status not in _SUCCESS_STATUSES:
+                degraded.append(f"{step_name} [{response.status}]")
+
         if not snapshot.steps_pending:
-            snapshot.status = "completed"
+            if degraded:
+                snapshot.status = "degraded"
+                snapshot.error = "Steps degradados: " + ", ".join(degraded)
+            else:
+                snapshot.status = "completed"
 
         # Salva snapshot no vault
         await self._save_snapshot(snapshot)

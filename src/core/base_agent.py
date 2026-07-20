@@ -48,6 +48,22 @@ class BaseAgent(ABC):
         """Executa a tarefa descrita no context_pack e retorna uma AgentResponse."""
         ...
 
+    def _max_tokens_for_depth(self, depth: str) -> int:
+        """Teto de tokens por profundidade, derivado de MAX_TOKENS_PER_CALL.
+
+        Centralizado aqui porque o mapa vivia duplicado nos 5 agentes com o teto
+        'deep' fixo em 4096 — pequeno demais para um plano tecnico completo, o
+        que truncava a resposta no meio do JSON.
+        """
+        from ..config.settings import get_settings
+
+        ceiling = get_settings().max_tokens_per_call
+        return {
+            "short": max(1024, ceiling // 4),
+            "medium": max(2048, ceiling // 2),
+            "deep": ceiling,
+        }.get(depth, max(2048, ceiling // 2))
+
     # ------------------------------------------------------------------
     # Loop agêntico (tool use)
     # ------------------------------------------------------------------

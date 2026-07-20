@@ -33,8 +33,7 @@ class ManagerAgent(BaseAgent):
 
     async def execute(self, context_pack: AgentContextPack) -> AgentResponse:
         task = context_pack.task
-        depth_tokens = {"short": 1024, "medium": 2048, "deep": 4096}
-        max_tokens = depth_tokens.get(task.max_response_depth, 1024)
+        max_tokens = self._max_tokens_for_depth(task.max_response_depth)
 
         if self.tool_executor:
             from ..tools.definitions import get_tool_definitions_for_role

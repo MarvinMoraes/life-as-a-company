@@ -354,7 +354,7 @@ async def _run_workflow(
             live.stop()
             console.print()
             console.rule("[bold]Resultado do Workflow[/bold]")
-            status_style = "green" if snapshot.status == "completed" else "red"
+            status_style = {"completed": "green", "degraded": "yellow"}.get(snapshot.status, "red")
             console.print(f"Status: [{status_style}]{snapshot.status}[/{status_style}]")
             console.print(f"Steps concluidos: {', '.join(snapshot.steps_completed)}")
             console.print(f"Tokens usados: {snapshot.token_budget_used}")

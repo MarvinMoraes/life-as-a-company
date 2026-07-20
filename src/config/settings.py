@@ -34,7 +34,8 @@ class Settings(BaseSettings):
     model_marketing: str = "claude-haiku-4-5"  # copy / marketing
 
     # Token governance
-    max_tokens_per_call: int = 4096
+    # Teto do step 'deep'. 4096 truncava TechnicalPlan no meio do JSON.
+    max_tokens_per_call: int = 16384
     max_context_tokens: int = 8192
     compression_threshold: int = 6000
 

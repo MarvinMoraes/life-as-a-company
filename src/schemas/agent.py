@@ -79,7 +79,9 @@ class ExecutionSnapshot(BaseModel):
     snapshot_id: str
     workflow_name: str
     project_id: str
-    status: str = Field(description="'running' | 'completed' | 'failed' | 'paused'")
+    status: str = Field(
+        description="'running' | 'completed' | 'degraded' | 'failed' | 'paused'"
+    )
     current_step: str = ""
     steps_completed: list[str] = Field(default_factory=list)
     steps_pending: list[str] = Field(default_factory=list)
