@@ -1,5 +1,10 @@
 ﻿# life-as-a-company
 
+> **Arquivado em 24/10/2026.** Este orquestrador foi substituído pelo Claude Code com skills.
+> Motivo e plano: `laac/Decisions/2026-10-24-estrategia-renda-e-ajustes-da-fabrica.md` (vault Obsidian).
+> O que continua em uso: os templates de PRD/ADR/SDD no vault `laac/Templates` e a skill `/diagnostico-pme`
+> em `~/.claude/skills/diagnostico-pme`. O código abaixo fica como histórico; não é mantido.
+
 **Uma fábrica de SaaS agêntica.** Cinco agentes especializados que orquestram, planejam, codificam, pesquisam e revisam — com tool use real, memória em Obsidian e disciplina máxima de tokens.
 
 ---
